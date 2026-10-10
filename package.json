@@ -1,0 +1,30 @@
+{
+  "name": "syllabi",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "astryx": "node node_modules/@astryxdesign/cli/clients/cli/bin/astryx.mjs"
+  },
+  "dependencies": {
+    "@astryxdesign/core": "^0.6.5",
+    "@astryxdesign/theme-neutral": "^0.6.5",
+    "@stylexjs/stylex": "^0.19.1",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.49.1",
+    "lucide-react": "^1.18.0",
+    "next": "^15.2.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@astryxdesign/cli": "^0.6.5",
+    "@types/node": "^22.13.9",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "typescript": "^5.8.2"
+  }
+}
