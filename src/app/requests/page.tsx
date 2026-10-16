@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useSyllabi } from '@/lib/store';
 import {
   INITIAL_QUALIFICATIONS,
@@ -10,7 +9,7 @@ import {
   INITIAL_SUBJECTS,
 } from '@/lib/data';
 import { ResourceRequest } from '@/lib/types';
-import { getSubjectColor, getStatusStyle } from '@/lib/academicColors';
+import { getSubjectColor } from '@/lib/academicColors';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Grid } from '@astryxdesign/core/Grid';
 import { Text } from '@astryxdesign/core/Text';
@@ -25,7 +24,6 @@ import { TextArea } from '@astryxdesign/core/TextArea';
 import { Selector } from '@astryxdesign/core/Selector';
 
 export default function RequestsPage() {
-  const router = useRouter();
   const { requests, createRequest, updateRequest, currentUser, resources } = useSyllabi();
 
   // Exactly TWO primary sections: "for_you" and "my_requests"
@@ -57,32 +55,46 @@ export default function RequestsPage() {
 
   // "FOR YOU" RANKING & FILTERING
   // Requests other students made that current user can realistically help with
-  const forYouRequests = requests
-    .filter((req) => req.status === 'open')
-    .map((req) => {
-      let matchScore = 0;
-      const subjMatch = userSubjects.some(
-        (s) => s.toLowerCase() === req.subjectName.toLowerCase()
-      );
-      const qualMatch = req.qualificationName.toLowerCase() === userQual.toLowerCase();
-      const boardMatch = req.examBoardName.toLowerCase() === userBoard.toLowerCase();
+  const forYouRequests = useMemo(
+    () =>
+      requests
+        .filter((req) => req.status === 'open')
+        .map((req) => {
+          let matchScore = 0;
+          const subjMatch = userSubjects.some(
+            (s) => s.toLowerCase() === req.subjectName.toLowerCase()
+          );
+          const qualMatch = req.qualificationName.toLowerCase() === userQual.toLowerCase();
+          const boardMatch = req.examBoardName.toLowerCase() === userBoard.toLowerCase();
 
-      if (subjMatch) matchScore += 10;
-      if (qualMatch) matchScore += 5;
-      if (boardMatch) matchScore += 3;
+          if (subjMatch) matchScore += 10;
+          if (qualMatch) matchScore += 5;
+          if (boardMatch) matchScore += 3;
 
-      return { req, matchScore };
-    })
-    .sort((a, b) => b.matchScore - a.matchScore)
-    .map((item) => item.req);
-
-  // "MY REQUESTS" FILTERING
-  const myRequests = requests.filter(
-    (req) => req.username.toLowerCase() === (currentUser?.username || '').toLowerCase()
+          return { req, matchScore };
+        })
+        .sort((a, b) => b.matchScore - a.matchScore)
+        .map((item) => item.req),
+    [requests, userSubjects, userQual, userBoard]
   );
 
-  const myOpenRequests = myRequests.filter((r) => r.status === 'open');
-  const myFulfilledRequests = myRequests.filter((r) => r.status === 'fulfilled');
+  // "MY REQUESTS" FILTERING
+  const myRequests = useMemo(
+    () =>
+      requests.filter(
+        (req) => req.username.toLowerCase() === (currentUser?.username || '').toLowerCase()
+      ),
+    [requests, currentUser?.username]
+  );
+
+  const myOpenRequests = useMemo(
+    () => myRequests.filter((r) => r.status === 'open'),
+    [myRequests]
+  );
+  const myFulfilledRequests = useMemo(
+    () => myRequests.filter((r) => r.status === 'fulfilled'),
+    [myRequests]
+  );
 
   const handleOpenCreateModal = () => {
     // Pre-fill with current user's profile
@@ -481,135 +493,139 @@ export default function RequestsPage() {
       </VStack>
 
       {/* CREATE REQUEST MODAL */}
-      <Dialog
-        isOpen={createModalOpen}
-        onOpenChange={(open) => !open && setCreateModalOpen(false)}
-        width={620}
-      >
-        <DialogHeader title="Request an Academic Resource" />
-        <div style={{ padding: 'var(--spacing-4)' }}>
-          <VStack gap={4}>
-            <Text type="body" color="secondary" size="sm">
-              Pre-filled with your current study profile. Explain what topic notes or summary sheet you need.
-            </Text>
+      {createModalOpen && (
+        <Dialog
+          isOpen={createModalOpen}
+          onOpenChange={(open) => !open && setCreateModalOpen(false)}
+          width={620}
+        >
+          <DialogHeader title="Request an Academic Resource" />
+          <div style={{ padding: 'var(--spacing-4)' }}>
+            <VStack gap={4}>
+              <Text type="body" color="secondary" size="sm">
+                Pre-filled with your current study profile. Explain what topic notes or summary sheet you need.
+              </Text>
 
-            <Grid columns={{ minWidth: 140, repeat: 'fit' }} gap={2}>
-              <Selector
-                label="Qualification"
-                value={qualification}
-                onChange={(val) => setQualification(String(val))}
-                options={INITIAL_QUALIFICATIONS.map((q) => ({ value: q.name, label: q.name }))}
-                size="sm"
+              <Grid columns={{ minWidth: 140, repeat: 'fit' }} gap={2}>
+                <Selector
+                  label="Qualification"
+                  value={qualification}
+                  onChange={(val) => setQualification(String(val))}
+                  options={INITIAL_QUALIFICATIONS.map((q) => ({ value: q.name, label: q.name }))}
+                  size="sm"
+                />
+                <Selector
+                  label="Exam Board"
+                  value={examBoard}
+                  onChange={(val) => setExamBoard(String(val))}
+                  options={INITIAL_EXAM_BOARDS.map((b) => ({ value: b.name, label: b.name }))}
+                  size="sm"
+                />
+                <Selector
+                  label="Subject"
+                  value={subject}
+                  onChange={(val) => setSubject(String(val))}
+                  options={INITIAL_SUBJECTS.map((s) => ({ value: s.name, label: s.name }))}
+                  size="sm"
+                />
+              </Grid>
+
+              <TextInput
+                label="Topic"
+                placeholder="e.g. Electrolysis, Photosynthesis, Calculus"
+                value={topicName}
+                onChange={setTopicName}
               />
-              <Selector
-                label="Exam Board"
-                value={examBoard}
-                onChange={(val) => setExamBoard(String(val))}
-                options={INITIAL_EXAM_BOARDS.map((b) => ({ value: b.name, label: b.name }))}
-                size="sm"
+
+              <TextInput
+                label="What resource do you need?"
+                placeholder="e.g. Concise topic summary with required practical steps"
+                value={title}
+                onChange={setTitle}
               />
-              <Selector
-                label="Subject"
-                value={subject}
-                onChange={(val) => setSubject(String(val))}
-                options={INITIAL_SUBJECTS.map((s) => ({ value: s.name, label: s.name }))}
-                size="sm"
+
+              <TextArea
+                label="Additional details or specific exam focus"
+                placeholder="Describe what specific subtopics or diagrams would help most..."
+                value={description}
+                onChange={setDescription}
+                rows={3}
               />
-            </Grid>
 
-            <TextInput
-              label="Topic"
-              placeholder="e.g. Electrolysis, Photosynthesis, Calculus"
-              value={topicName}
-              onChange={setTopicName}
-            />
-
-            <TextInput
-              label="What resource do you need?"
-              placeholder="e.g. Concise topic summary with required practical steps"
-              value={title}
-              onChange={setTitle}
-            />
-
-            <TextArea
-              label="Additional details or specific exam focus"
-              placeholder="Describe what specific subtopics or diagrams would help most..."
-              value={description}
-              onChange={setDescription}
-              rows={3}
-            />
-
-            <HStack justify="end" gap={2}>
-              <Button variant="secondary" label="Cancel" onClick={() => setCreateModalOpen(false)} />
-              <Button variant="primary" label="Post Request" onClick={handleCreateSubmit} />
-            </HStack>
-          </VStack>
-        </div>
-      </Dialog>
+              <HStack justify="end" gap={2}>
+                <Button variant="secondary" label="Cancel" onClick={() => setCreateModalOpen(false)} />
+                <Button variant="primary" label="Post Request" onClick={handleCreateSubmit} />
+              </HStack>
+            </VStack>
+          </div>
+        </Dialog>
+      )}
 
       {/* EDIT REQUEST MODAL (FOR OPEN REQUESTS ONLY) */}
-      <Dialog
-        isOpen={Boolean(editingRequest)}
-        onOpenChange={(open) => !open && setEditingRequest(null)}
-        width={620}
-      >
-        <DialogHeader title="Edit Open Request" />
-        <div style={{ padding: 'var(--spacing-4)' }}>
-          <VStack gap={4}>
-            <Text type="supporting" color="secondary" size="sm">
-              You can edit this request because it has not yet been fulfilled. Once fulfilled, requests become locked.
-            </Text>
+      {editingRequest && (
+        <Dialog
+          isOpen={Boolean(editingRequest)}
+          onOpenChange={(open) => !open && setEditingRequest(null)}
+          width={620}
+        >
+          <DialogHeader title="Edit Open Request" />
+          <div style={{ padding: 'var(--spacing-4)' }}>
+            <VStack gap={4}>
+              <Text type="supporting" color="secondary" size="sm">
+                You can edit this request because it has not yet been fulfilled. Once fulfilled, requests become locked.
+              </Text>
 
-            <TextInput
-              label="Request Title"
-              value={editTitle}
-              onChange={setEditTitle}
-            />
-
-            <Grid columns={{ minWidth: 140, repeat: 'fit' }} gap={2}>
-              <Selector
-                label="Qualification"
-                value={editQual}
-                onChange={(val) => setEditQual(String(val))}
-                options={INITIAL_QUALIFICATIONS.map((q) => ({ value: q.name, label: q.name }))}
-                size="sm"
+              <TextInput
+                label="Request Title"
+                value={editTitle}
+                onChange={setEditTitle}
               />
-              <Selector
-                label="Exam Board"
-                value={editBoard}
-                onChange={(val) => setEditBoard(String(val))}
-                options={INITIAL_EXAM_BOARDS.map((b) => ({ value: b.name, label: b.name }))}
-                size="sm"
+
+              <Grid columns={{ minWidth: 140, repeat: 'fit' }} gap={2}>
+                <Selector
+                  label="Qualification"
+                  value={editQual}
+                  onChange={(val) => setEditQual(String(val))}
+                  options={INITIAL_QUALIFICATIONS.map((q) => ({ value: q.name, label: q.name }))}
+                  size="sm"
+                />
+                <Selector
+                  label="Exam Board"
+                  value={editBoard}
+                  onChange={(val) => setEditBoard(String(val))}
+                  options={INITIAL_EXAM_BOARDS.map((b) => ({ value: b.name, label: b.name }))}
+                  size="sm"
+                />
+                <Selector
+                  label="Subject"
+                  value={editSubj}
+                  onChange={(val) => setEditSubj(String(val))}
+                  options={INITIAL_SUBJECTS.map((s) => ({ value: s.name, label: s.name }))}
+                  size="sm"
+                />
+              </Grid>
+
+              <TextInput
+                label="Topic"
+                value={editTopic}
+                onChange={setEditTopic}
               />
-              <Selector
-                label="Subject"
-                value={editSubj}
-                onChange={(val) => setEditSubj(String(val))}
-                options={INITIAL_SUBJECTS.map((s) => ({ value: s.name, label: s.name }))}
-                size="sm"
+
+              <TextArea
+                label="Description"
+                value={editDesc}
+                onChange={setEditDesc}
+                rows={3}
               />
-            </Grid>
 
-            <TextInput
-              label="Topic"
-              value={editTopic}
-              onChange={setEditTopic}
-            />
-
-            <TextArea
-              label="Description"
-              value={editDesc}
-              onChange={setEditDesc}
-              rows={3}
-            />
-
-            <HStack justify="end" gap={2}>
-              <Button variant="secondary" label="Cancel" onClick={() => setEditingRequest(null)} />
-              <Button variant="primary" label="Save Changes" onClick={handleSaveEdit} />
-            </HStack>
-          </VStack>
-        </div>
-      </Dialog>
+              <HStack justify="end" gap={2}>
+                <Button variant="secondary" label="Cancel" onClick={() => setEditingRequest(null)} />
+                <Button variant="primary" label="Save Changes" onClick={handleSaveEdit} />
+              </HStack>
+            </VStack>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

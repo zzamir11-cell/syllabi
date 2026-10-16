@@ -1,12 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useSyllabi } from '@/lib/store';
 import { ResourceCard } from '@/components/ResourceCard';
-import { ResourceGridSkeleton } from '@/components/ResourceCardSkeleton';
-import { getSubjectColor, getQualificationBadgeStyle } from '@/lib/academicColors';
+import { getQualificationBadgeStyle } from '@/lib/academicColors';
 import { Section } from '@astryxdesign/core/Section';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Grid } from '@astryxdesign/core/Grid';
@@ -16,47 +14,57 @@ import { Button } from '@astryxdesign/core/Button';
 import { Token } from '@astryxdesign/core/Token';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { Card } from '@astryxdesign/core/Card';
-import { EmptyState } from '@astryxdesign/core/EmptyState';
 
 export default function YourSubjectsPage() {
-  const router = useRouter();
   const { currentUser, resources, requests } = useSyllabi();
 
   const userSubjects = currentUser?.subjects || ['Chemistry', 'Biology', 'Physics', 'Mathematics'];
   const [selectedSubject, setSelectedSubject] = useState(userSubjects[0] || 'Chemistry');
-  const [isSwitchingSubject, setIsSwitchingSubject] = useState(false);
 
   const handleSelectSubject = (subj: string) => {
-    setIsSwitchingSubject(true);
     setSelectedSubject(subj);
-    setTimeout(() => setIsSwitchingSubject(false), 240);
   };
 
   const qualification = currentUser?.qualification || 'GCSE';
   const examBoard = currentUser?.examBoard || 'AQA';
-  const currentSubColor = getSubjectColor(selectedSubject);
   const qualBadge = getQualificationBadgeStyle(qualification);
 
   // Filter resources matching current user's exact specification & selected subject
-  const subjectResources = resources.filter(
-    (r) =>
-      r.status !== 'removed' &&
-      r.subjectName.toLowerCase() === selectedSubject.toLowerCase()
+  const subjectResources = useMemo(
+    () =>
+      resources.filter(
+        (r) =>
+          r.status !== 'removed' &&
+          r.subjectName.toLowerCase() === selectedSubject.toLowerCase()
+      ),
+    [resources, selectedSubject]
   );
 
-  const topResources = [...subjectResources]
-    .sort((a, b) => b.savesCount - a.savesCount)
-    .slice(0, 4);
+  const topResources = useMemo(
+    () =>
+      [...subjectResources]
+        .sort((a, b) => b.savesCount - a.savesCount)
+        .slice(0, 4),
+    [subjectResources]
+  );
 
-  const latestResources = [...subjectResources]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 4);
+  const latestResources = useMemo(
+    () =>
+      [...subjectResources]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 4),
+    [subjectResources]
+  );
 
   // Filter requests student can fulfill for this subject
-  const fulfillableRequests = requests.filter(
-    (req) =>
-      req.status === 'open' &&
-      req.subjectName.toLowerCase() === selectedSubject.toLowerCase()
+  const fulfillableRequests = useMemo(
+    () =>
+      requests.filter(
+        (req) =>
+          req.status === 'open' &&
+          req.subjectName.toLowerCase() === selectedSubject.toLowerCase()
+      ),
+    [requests, selectedSubject]
   );
 
   return (
@@ -199,11 +207,7 @@ export default function YourSubjectsPage() {
             </Link>
           </HStack>
 
-          {isSwitchingSubject ? (
-            <Grid columns={{ minWidth: 270, repeat: 'fit' }} gap={4}>
-              <ResourceGridSkeleton count={4} />
-            </Grid>
-          ) : topResources.length > 0 ? (
+          {topResources.length > 0 ? (
             <Grid columns={{ minWidth: 270, repeat: 'fit' }} gap={4}>
               {topResources.map((res) => (
                 <ResourceCard key={res.id} resource={res} />
@@ -239,11 +243,7 @@ export default function YourSubjectsPage() {
             </VStack>
           </HStack>
 
-          {isSwitchingSubject ? (
-            <Grid columns={{ minWidth: 270, repeat: 'fit' }} gap={4}>
-              <ResourceGridSkeleton count={4} />
-            </Grid>
-          ) : latestResources.length > 0 ? (
+          {latestResources.length > 0 ? (
             <Grid columns={{ minWidth: 270, repeat: 'fit' }} gap={4}>
               {latestResources.map((res) => (
                 <ResourceCard key={res.id} resource={res} />

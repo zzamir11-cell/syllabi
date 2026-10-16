@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { SyllabiLogo } from './SyllabiLogo';
 import { useSyllabi } from '@/lib/store';
-import { INITIAL_CREATORS } from '@/lib/data';
 import { TopNav, TopNavItem, TopNavHeading } from '@astryxdesign/core/TopNav';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Button } from '@astryxdesign/core/Button';
@@ -18,7 +17,7 @@ import { Avatar } from '@astryxdesign/core/Avatar';
 export function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, setCurrentUser, savedResourceIds, themeMode, toggleThemeMode } = useSyllabi();
+  const { currentUser, signOutUser, savedResourceIds, themeMode, toggleThemeMode } = useSyllabi();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
@@ -109,59 +108,72 @@ export function Navigation() {
                 />
               </Link>
 
-              {/* User Switcher / Profile Menu */}
+              {/* Real User Profile Menu or Sign In */}
               {currentUser ? (
-                <HStack gap={2} vAlign="center">
-                  <Link href={`/creator/${currentUser.username}`} style={{ textDecoration: 'none' }}>
-                    <HStack gap={1.5} vAlign="center">
-                      <Avatar
-                        size="sm"
-                        name={currentUser.fullName || currentUser.username}
-                        src={currentUser.avatarUrl || undefined}
-                      />
-                      <Text type="supporting" weight="semibold" size="sm">
-                        @{currentUser.username}
-                      </Text>
-                    </HStack>
+                <HStack gap={1} vAlign="center">
+                  <Link href="/profile" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+                    <Avatar
+                      size="sm"
+                      name={currentUser.fullName || currentUser.username}
+                      src={currentUser.avatarUrl || undefined}
+                    />
                   </Link>
-
-                  {/* Switch Persona Dropdown */}
                   <DropdownMenu
                     button={{
-                      label: 'Switch',
+                      label: `@${currentUser.username}`,
                       size: 'sm',
                       variant: 'ghost',
                     }}
                     items={[
                       {
-                        label: `@${currentUser.username}`,
-                        description: `${currentUser.fullName} (${currentUser.qualification})`,
-                        isDisabled: true,
+                        label: currentUser.fullName || `@${currentUser.username}`,
+                        description: `${currentUser.qualification} • ${currentUser.examBoard || ''}`,
+                        onClick: () => router.push('/profile'),
                       },
-                      { type: 'divider' },
-                      ...INITIAL_CREATORS.map((c) => ({
-                        label: `@${c.username}`,
-                        description: `${c.fullName} • ${c.qualification} ${c.examBoard || ''}`,
-                        onClick: () => setCurrentUser(c),
-                      })),
                       { type: 'divider' },
                       {
-                        label: 'Admin Console',
-                        description: 'Review reports & moderation',
-                        onClick: () => router.push('/admin'),
+                        label: 'Your Profile',
+                        description: 'View your student portfolio and notes',
+                        onClick: () => router.push('/profile'),
                       },
+                      {
+                        label: 'Account Settings',
+                        description: 'Update subjects, qualifications & bio',
+                        onClick: () => router.push('/settings'),
+                      },
+                      {
+                        label: 'Your Collections',
+                        description: 'Study stacks organized by you',
+                        onClick: () => router.push('/collections'),
+                      },
+                      {
+                        label: 'Saved Resources',
+                        description: `${savedResourceIds.length} saved resources`,
+                        onClick: () => router.push('/saved'),
+                      },
+                      ...(currentUser.role === 'admin'
+                        ? [
+                            { type: 'divider' as const },
+                            {
+                              label: 'Admin Console',
+                              description: 'Review reports & moderation',
+                              onClick: () => router.push('/admin'),
+                            },
+                          ]
+                        : []),
+                      { type: 'divider' },
                       {
                         label: 'Sign Out',
-                        onClick: () => {
-                          setCurrentUser(null);
-                          router.push('/login');
+                        onClick: async () => {
+                          await signOutUser();
+                          router.push('/');
                         },
                       },
                     ]}
                   />
                 </HStack>
               ) : (
-                <HStack gap={2}>
+                <HStack gap={1.5} vAlign="center">
                   <Link href="/login" style={{ textDecoration: 'none' }}>
                     <Button size="sm" variant="ghost" label="Sign in" />
                   </Link>

@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, use } from 'react';
+import React, { useState, useEffect, useMemo, use } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useSyllabi } from '@/lib/store';
 import { INITIAL_CREATORS } from '@/lib/data';
+import { UserProfile } from '@/lib/types';
+import { fetchProfileFromSupabase } from '@/lib/supabase/service';
 import { ResourceCard } from '@/components/ResourceCard';
-import { ShareCardModal } from '@/components/ShareCardModal';
 import { formatSavesCount, formatViewsCount } from '@/lib/formatters';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Grid } from '@astryxdesign/core/Grid';
@@ -16,6 +18,11 @@ import { Card } from '@astryxdesign/core/Card';
 import { Token } from '@astryxdesign/core/Token';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
+
+const ShareCardModal = dynamic(
+  () => import('@/components/ShareCardModal').then((mod) => mod.ShareCardModal),
+  { ssr: false }
+);
 
 interface CreatorPageProps {
   params: Promise<{ username: string }>;
@@ -38,26 +45,68 @@ export default function CreatorProfilePage({ params }: CreatorPageProps) {
 
   const [activeTab, setActiveTab] = useState<'resources' | 'collections' | 'activity' | 'connections'>('resources');
   const [profileShareOpen, setProfileShareOpen] = useState(false);
+  const [remoteCreator, setRemoteCreator] = useState<UserProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
-  const creator = INITIAL_CREATORS.find(
-    (c) => c.username.toLowerCase() === resolvedParams.username.toLowerCase()
-  ) || (currentUser && currentUser.username.toLowerCase() === resolvedParams.username.toLowerCase() ? currentUser : null);
+  const lowerParamUsername = resolvedParams.username.toLowerCase();
 
-  const isSelf = currentUser && currentUser.username.toLowerCase() === resolvedParams.username.toLowerCase();
+  const localCreator = useMemo(
+    () =>
+      INITIAL_CREATORS.find((c) => c.username.toLowerCase() === lowerParamUsername) ||
+      (currentUser && currentUser.username.toLowerCase() === lowerParamUsername ? currentUser : null),
+    [currentUser, lowerParamUsername]
+  );
+
+  useEffect(() => {
+    let active = true;
+    if (!localCreator && resolvedParams.username) {
+      setIsLoadingProfile(true);
+      fetchProfileFromSupabase(resolvedParams.username)
+        .then((profile) => {
+          if (active && profile) {
+            setRemoteCreator(profile);
+          }
+        })
+        .finally(() => {
+          if (active) setIsLoadingProfile(false);
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [localCreator, resolvedParams.username]);
+
+  const creator = localCreator || remoteCreator;
+
+  const isSelf = Boolean(currentUser && currentUser.username.toLowerCase() === lowerParamUsername);
   const isFollowing = followingUsernames.includes(resolvedParams.username);
-  const connectionState = connections.find((c) => c.username.toLowerCase() === resolvedParams.username.toLowerCase());
-
-  const creatorResources = resources.filter(
-    (r) => r.creatorUsername.toLowerCase() === resolvedParams.username.toLowerCase()
+  const connectionState = useMemo(
+    () => connections.find((c) => c.username.toLowerCase() === lowerParamUsername),
+    [connections, lowerParamUsername]
   );
 
-  const creatorCollections = collections.filter(
-    (c) => c.username.toLowerCase() === resolvedParams.username.toLowerCase()
+  const creatorResources = useMemo(
+    () => resources.filter((r) => r.creatorUsername.toLowerCase() === lowerParamUsername),
+    [resources, lowerParamUsername]
   );
 
-  const creatorActivity = academicActivity.filter(
-    (a) => a.username.toLowerCase() === resolvedParams.username.toLowerCase()
+  const creatorCollections = useMemo(
+    () => collections.filter((c) => c.username.toLowerCase() === lowerParamUsername),
+    [collections, lowerParamUsername]
   );
+
+  const creatorActivity = useMemo(
+    () => academicActivity.filter((a) => a.username.toLowerCase() === lowerParamUsername),
+    [academicActivity, lowerParamUsername]
+  );
+
+  if (isLoadingProfile && !creator) {
+    return (
+      <div style={{ maxWidth: 800, margin: '60px auto', padding: '0 20px', textAlign: 'center' }}>
+        <Text type="body" color="secondary">Loading creator profile...</Text>
+      </div>
+    );
+  }
 
   if (!creator) {
     return (
@@ -115,6 +164,10 @@ export default function CreatorProfilePage({ params }: CreatorPageProps) {
                       <img
                         src={creator.avatarUrl}
                         alt={`@${creator.username}`}
+                        width={68}
+                        height={68}
+                        loading="lazy"
+                        decoding="async"
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     ) : (
@@ -184,7 +237,11 @@ export default function CreatorProfilePage({ params }: CreatorPageProps) {
                   onClick={() => setProfileShareOpen(true)}
                 />
 
-                {!isSelf && (
+                {isSelf ? (
+                  <Link href="/settings" style={{ textDecoration: 'none' }}>
+                    <Button size="sm" variant="primary" label="Edit Settings ⚙" />
+                  </Link>
+                ) : (
                   <>
                     <Button
                       size="sm"
@@ -443,12 +500,14 @@ export default function CreatorProfilePage({ params }: CreatorPageProps) {
       </VStack>
 
       {/* Profile Share Card Modal */}
-      <ShareCardModal
-        profile={creator}
-        isOpen={profileShareOpen}
-        onClose={() => setProfileShareOpen(false)}
-        defaultStyle="study_achievement"
-      />
+      {profileShareOpen && (
+        <ShareCardModal
+          profile={creator}
+          isOpen={profileShareOpen}
+          onClose={() => setProfileShareOpen(false)}
+          defaultStyle="study_achievement"
+        />
+      )}
     </div>
   );
 }

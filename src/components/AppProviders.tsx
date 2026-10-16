@@ -2,6 +2,7 @@
 
 import React from 'react';
 import NextLink from 'next/link';
+import dynamic from 'next/dynamic';
 import { Theme } from '@astryxdesign/core/theme';
 import { LinkProvider } from '@astryxdesign/core/Link';
 import { VStack } from '@astryxdesign/core/Layout';
@@ -15,8 +16,13 @@ import { CookieBanner } from '@/components/CookieBanner';
 import { ToastPresenter } from '@/components/ToastPresenter';
 import { NavigationProgress } from '@/components/NavigationProgress';
 
+const GoogleAuthModal = dynamic(
+  () => import('@/components/GoogleAuthModal').then((mod) => mod.GoogleAuthModal),
+  { ssr: false }
+);
+
 function ThemedShell({ children }: { children: React.ReactNode }) {
-  const { themeMode } = useSyllabi();
+  const { themeMode, isGoogleModalOpen } = useSyllabi();
 
   return (
     <Theme theme={neutralTheme} mode={themeMode}>
@@ -36,6 +42,7 @@ function ThemedShell({ children }: { children: React.ReactNode }) {
         <Footer />
         <CookieBanner />
         <ToastPresenter />
+        {isGoogleModalOpen && <GoogleAuthModal />}
       </VStack>
     </Theme>
   );

@@ -240,6 +240,46 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_topics_subject ON topics(subject_id);
+CREATE INDEX IF NOT EXISTS idx_topics_exam_board ON topics(exam_board_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
+CREATE INDEX IF NOT EXISTS idx_profiles_username_lower ON profiles(LOWER(username));
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
+CREATE INDEX IF NOT EXISTS idx_resources_slug ON resources(slug);
+CREATE INDEX IF NOT EXISTS idx_resources_creator ON resources(creator_id);
+CREATE INDEX IF NOT EXISTS idx_resources_qualification ON resources(qualification_id);
+CREATE INDEX IF NOT EXISTS idx_resources_exam_board ON resources(exam_board_id);
+CREATE INDEX IF NOT EXISTS idx_resources_subject ON resources(subject_id);
+CREATE INDEX IF NOT EXISTS idx_resources_topic ON resources(topic_id);
+CREATE INDEX IF NOT EXISTS idx_resources_status ON resources(status);
+CREATE INDEX IF NOT EXISTS idx_resources_featured ON resources(is_featured);
+CREATE INDEX IF NOT EXISTS idx_resources_rating ON resources(rating_avg DESC);
+CREATE INDEX IF NOT EXISTS idx_resources_saves ON resources(saves_count DESC);
+CREATE INDEX IF NOT EXISTS idx_resources_downloads ON resources(downloads_count DESC);
+CREATE INDEX IF NOT EXISTS idx_resources_created ON resources(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_resources_published_saves ON resources(saves_count DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_resources_published_created ON resources(created_at DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_resources_published_rating ON resources(rating_avg DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_resources_published_downloads ON resources(downloads_count DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_resources_published_subject_saves ON resources(subject_id, saves_count DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_resources_search ON resources USING gin(to_tsvector('english', title || ' ' || description));
+CREATE INDEX IF NOT EXISTS idx_resource_files_resource ON resource_files(resource_id);
+CREATE INDEX IF NOT EXISTS idx_resource_saves_resource ON resource_saves(resource_id);
+CREATE INDEX IF NOT EXISTS idx_ratings_resource ON ratings(resource_id);
+CREATE INDEX IF NOT EXISTS idx_collections_user ON collections(user_id);
+CREATE INDEX IF NOT EXISTS idx_collections_visibility ON collections(visibility);
+CREATE INDEX IF NOT EXISTS idx_collection_items_collection ON collection_items(collection_id);
+CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
+CREATE INDEX IF NOT EXISTS idx_requests_status ON resource_requests(status);
+CREATE INDEX IF NOT EXISTS idx_requests_subject ON resource_requests(subject_id);
+CREATE INDEX IF NOT EXISTS idx_requests_user ON resource_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_requests_created ON resource_requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_requests_status_created ON resource_requests(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
+CREATE INDEX IF NOT EXISTS idx_reports_target ON reports(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read);
+
 -- RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE qualifications ENABLE ROW LEVEL SECURITY;

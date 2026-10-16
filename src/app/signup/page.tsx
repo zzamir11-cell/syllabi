@@ -8,6 +8,7 @@ import { INITIAL_QUALIFICATIONS, INITIAL_EXAM_BOARDS } from '@/lib/data';
 import { createClient } from '@/lib/supabase/client';
 import { isSupabaseConfigured } from '@/lib/supabase/service';
 import { SyllabiLogo } from '@/components/SyllabiLogo';
+import { GoogleLogo } from '@/components/GoogleLogo';
 import { Center } from '@astryxdesign/core/Center';
 import { Card } from '@astryxdesign/core/Card';
 import { VStack, HStack, StackItem } from '@astryxdesign/core/Layout';
@@ -21,7 +22,7 @@ import { Divider } from '@astryxdesign/core/Divider';
 
 export default function SignUpPage() {
   const router = useRouter();
-  const { setCurrentUser, showToast, signInWithGoogle } = useSyllabi();
+  const { showToast, signInWithGoogle } = useSyllabi();
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -43,61 +44,33 @@ export default function SignUpPage() {
 
     const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
 
-    if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: {
-            data: {
-              username: cleanUsername,
-              full_name: cleanUsername,
-              qualification,
-              exam_board: examBoard,
-              subjects: ['Chemistry', 'Biology', 'Physics'],
-            },
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            username: cleanUsername,
+            full_name: cleanUsername,
+            qualification,
+            exam_board: examBoard,
+            subjects: ['Chemistry', 'Biology', 'Physics'],
           },
-        });
+        },
+      });
 
-        if (error) {
-          setErrorMsg(error.message);
-          setIsLoading(false);
-          return;
-        }
-
-        showToast('Registration successful! Welcome to Syllabi.');
-        router.push('/explore');
-      } catch (err: any) {
-        setErrorMsg(err.message || 'Registration failed');
+      if (error) {
+        setErrorMsg(error.message);
         setIsLoading(false);
+        return;
       }
-    } else {
-      // Local fallback for testing
-      setTimeout(() => {
-        setIsLoading(false);
-        const newUser = {
-          id: `user-${Date.now()}`,
-          username: cleanUsername,
-          fullName: cleanUsername,
-          bio: `${qualification} student studying ${examBoard}.`,
-          qualification,
-          examBoard,
-          subjects: ['Chemistry', 'Biology', 'Physics'],
-          isPublic: true,
-          showActivity: true,
-          allowIndexing: true,
-          role: 'student' as const,
-          resourcesCount: 0,
-          totalViews: 0,
-          totalSaves: 0,
-          createdAt: new Date().toISOString(),
-        };
 
-        setCurrentUser(newUser);
-        showToast(`Account created! Welcome, @${cleanUsername}`);
-        router.push('/explore');
-      }, 500);
+      showToast('Registration successful! Welcome to Syllabi.');
+      router.push('/profile');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Registration failed');
+      setIsLoading(false);
     }
   };
 
@@ -127,6 +100,7 @@ export default function SignUpPage() {
             <Button
               size="lg"
               variant="secondary"
+              icon={<GoogleLogo size={18} />}
               label="Sign up with Google"
               onClick={() => signInWithGoogle()}
             />

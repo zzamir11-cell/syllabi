@@ -16,23 +16,18 @@ import { TextArea } from '@astryxdesign/core/TextArea';
 import { Selector } from '@astryxdesign/core/Selector';
 
 export default function CollectionsPage() {
-  const { collections, createCollection, currentUser } = useSyllabi();
+  const { collections, createCollection } = useSyllabi();
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'private' | 'unlisted'>('public');
 
   const handleCreate = () => {
     if (!title.trim()) return;
-    setIsCreating(true);
-    setTimeout(() => {
-      createCollection(title.trim(), description.trim(), visibility);
-      setTitle('');
-      setDescription('');
-      setIsCreating(false);
-      setCreateModalOpen(false);
-    }, 350);
+    createCollection(title.trim(), description.trim(), visibility);
+    setTitle('');
+    setDescription('');
+    setCreateModalOpen(false);
   };
 
   return (
@@ -105,72 +100,74 @@ export default function CollectionsPage() {
       </VStack>
 
       {/* Create Collection Dialog */}
-      <Dialog
-        isOpen={createModalOpen}
-        onOpenChange={(open) => !open && setCreateModalOpen(false)}
-        width={540}
-      >
-        <DialogHeader
-          title="Create New Collection"
-          subtitle="Group study resources together for focused exam preparation."
-        />
-        <VStack gap={4} padding={4}>
-          <VStack gap={1}>
-            <Text type="label" weight="medium">
-              Collection Title *
-            </Text>
-            <TextInput
-              label="Collection Title"
-              isLabelHidden
-              placeholder="e.g. My GCSE Chemistry Revision Vault"
-              value={title}
-              onChange={setTitle}
-              size="md"
-            />
-          </VStack>
+      {createModalOpen && (
+        <Dialog
+          isOpen={createModalOpen}
+          onOpenChange={(open) => !open && setCreateModalOpen(false)}
+          width={540}
+        >
+          <DialogHeader
+            title="Create New Collection"
+            subtitle="Group study resources together for focused exam preparation."
+          />
+          <VStack gap={4} padding={4}>
+            <VStack gap={1}>
+              <Text type="label" weight="medium">
+                Collection Title *
+              </Text>
+              <TextInput
+                label="Collection Title"
+                isLabelHidden
+                placeholder="e.g. My GCSE Chemistry Revision Vault"
+                value={title}
+                onChange={setTitle}
+                size="md"
+              />
+            </VStack>
 
-          <VStack gap={1}>
-            <Text type="label" weight="medium">
-              Description
-            </Text>
-            <TextArea
-              label="Description"
-              isLabelHidden
-              placeholder="What subjects or exam papers is this collection targeted at?"
-              value={description}
-              onChange={setDescription}
-              rows={3}
-            />
-          </VStack>
+            <VStack gap={1}>
+              <Text type="label" weight="medium">
+                Description
+              </Text>
+              <TextArea
+                label="Description"
+                isLabelHidden
+                placeholder="What subjects or exam papers is this collection targeted at?"
+                value={description}
+                onChange={setDescription}
+                rows={3}
+              />
+            </VStack>
 
-          <VStack gap={1}>
-            <Text type="label" weight="medium">
-              Visibility
-            </Text>
-            <Selector
-              label="Visibility"
-              value={visibility}
-              onChange={(v) => setVisibility(v as any)}
-              size="md"
-              options={[
-                { value: 'public', label: 'Public (visible to all students & search)' },
-                { value: 'unlisted', label: 'Unlisted (only accessible via direct link)' },
-                { value: 'private', label: 'Private (only visible to you)' },
-              ]}
-            />
-          </VStack>
+            <VStack gap={1}>
+              <Text type="label" weight="medium">
+                Visibility
+              </Text>
+              <Selector
+                label="Visibility"
+                value={visibility}
+                onChange={(v) => setVisibility(v as 'public' | 'private' | 'unlisted')}
+                size="md"
+                options={[
+                  { value: 'public', label: 'Public (visible to all students & search)' },
+                  { value: 'unlisted', label: 'Unlisted (only accessible via direct link)' },
+                  { value: 'private', label: 'Private (only visible to you)' },
+                ]}
+              />
+            </VStack>
 
-          <HStack gap={3} justify="end">
-            <Button variant="secondary" label="Cancel" onClick={() => setCreateModalOpen(false)} />
-            <Button
-              variant="primary"
-              label={isCreating ? 'Creating Collection...' : 'Create Collection'}
-              isDisabled={!title.trim() || isCreating}
-              onClick={handleCreate}
-            />
-          </HStack>
-        </VStack>
-      </Dialog>
+            <HStack gap={3} justify="end">
+              <Button variant="secondary" label="Cancel" onClick={() => setCreateModalOpen(false)} />
+              <Button
+                variant="primary"
+                label="Create Collection"
+                isDisabled={!title.trim()}
+                onClick={handleCreate}
+              />
+            </HStack>
+          </VStack>
+        </Dialog>
+      )}
     </div>
   );
 }

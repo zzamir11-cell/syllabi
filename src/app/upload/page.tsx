@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSyllabi } from '@/lib/store';
 import {
@@ -13,12 +14,15 @@ import { ResourceType } from '@/lib/types';
 import { analyzeUploadedFile, AnalysisResult } from '@/lib/qualityPipeline';
 import { uploadResourceFileToStorage } from '@/lib/supabase/service';
 import { getSubjectColor, getSubjectTokenColor } from '@/lib/academicColors';
-import { ShareCardModal } from '@/components/ShareCardModal';
 import { Stepper, Step } from '@astryxdesign/core/Stepper';
-import { Section } from '@astryxdesign/core/Section';
 import { Grid } from '@astryxdesign/core/Grid';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Card } from '@astryxdesign/core/Card';
+
+const ShareCardModal = dynamic(
+  () => import('@/components/ShareCardModal').then((mod) => mod.ShareCardModal),
+  { ssr: false }
+);
 import { Text } from '@astryxdesign/core/Text';
 import { Heading } from '@astryxdesign/core/Heading';
 import { Button } from '@astryxdesign/core/Button';
@@ -215,7 +219,7 @@ function UploadContent() {
 
   const handlePublish = async () => {
     if (!currentUser) {
-      showToast('Please sign in or select a demo student persona.');
+      showToast('Please sign in to publish your study resources.');
       router.push('/login');
       return;
     }
@@ -822,7 +826,7 @@ function UploadContent() {
           </Card>
         )}
 
-        {publishedResource && (
+        {publishedResource && shareModalOpen && (
           <ShareCardModal
             resource={publishedResource}
             isOpen={shareModalOpen}

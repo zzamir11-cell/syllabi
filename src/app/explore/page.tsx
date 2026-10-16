@@ -72,9 +72,11 @@ function ExploreContent() {
   const [resourceType, setResourceType] = useState(paramType);
   const [sortOrder, setSortOrder] = useState(paramSort);
 
-  // Filter dialog state
+  // Filter dialog state & pagination
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(24);
+  const isInitialMount = useRef(true);
 
   // Keyboard shortcut: "/" or "Cmd+K" focuses search input
   useEffect(() => {
@@ -104,17 +106,25 @@ function ExploreContent() {
     setSortOrder(paramSort);
   }, [paramQ, paramQual, paramBoard, paramSubject, paramType, paramSort]);
 
-  // Debounce search with skeleton loading feedback
+  // Debounce text search without flashing skeleton on initial mount
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    if (query === debouncedQuery) {
+      return;
+    }
     setIsFiltering(true);
     const handler = setTimeout(() => {
       setDebouncedQuery(query);
+      setVisibleCount(24);
       if (query.trim().length > 2) {
         addRecentSearch(query.trim());
       }
       updateUrl(query, qualification, examBoard, subject, resourceType, sortOrder);
       setIsFiltering(false);
-    }, 280);
+    }, 220);
     return () => clearTimeout(handler);
   }, [query]);
 
@@ -135,7 +145,7 @@ function ExploreContent() {
     if (sort !== 'relevance') p.set('sort', sort);
 
     const qs = p.toString();
-    router.replace(qs ? `/explore?${qs}` : '/explore');
+    router.replace(qs ? `/explore?${qs}` : '/explore', { scroll: false });
   };
 
   const handleFilterChange = (
@@ -145,18 +155,16 @@ function ExploreContent() {
     newType: string,
     newSort: string
   ) => {
-    setIsFiltering(true);
     setQualification(newQual);
     setExamBoard(newBoard);
     setSubject(newSubj);
     setResourceType(newType);
     setSortOrder(newSort);
+    setVisibleCount(24);
     updateUrl(debouncedQuery, newQual, newBoard, newSubj, newType, newSort);
-    setTimeout(() => setIsFiltering(false), 250);
   };
 
   const handleClearFilters = () => {
-    setIsFiltering(true);
     setQuery('');
     setDebouncedQuery('');
     setQualification('all');
@@ -164,8 +172,9 @@ function ExploreContent() {
     setSubject('all');
     setResourceType('all');
     setSortOrder('relevance');
-    router.replace('/explore');
-    setTimeout(() => setIsFiltering(false), 250);
+    setVisibleCount(24);
+    setIsFiltering(false);
+    router.replace('/explore', { scroll: false });
   };
 
   // Filter & Sort logic
@@ -233,11 +242,10 @@ function ExploreContent() {
     return filteredResources.find((r) => r.isFeatured) || filteredResources[0];
   }, [filteredResources]);
 
-  // Remaining resources after featured
-  const regularResources = useMemo(() => {
-    if (!featuredResource) return [];
-    return filteredResources.filter((r) => r.id !== featuredResource.id);
-  }, [filteredResources, featuredResource]);
+  const displayedResources = useMemo(
+    () => filteredResources.slice(0, visibleCount),
+    [filteredResources, visibleCount]
+  );
 
   const activeFilterCount =
     (qualification !== 'all' ? 1 : 0) +
@@ -467,12 +475,25 @@ function ExploreContent() {
           <Grid columns={{ minWidth: 260, repeat: 'fit' }} gap={3}>
             <ResourceGridSkeleton count={6} />
           </Grid>
-        ) : filteredResources.length > 0 ? (
-          <Grid columns={{ minWidth: 260, repeat: 'fit' }} gap={3}>
-            {filteredResources.map((res) => (
-              <ResourceCard key={res.id} resource={res} elevation="none" />
-            ))}
-          </Grid>
+        ) : displayedResources.length > 0 ? (
+          <VStack gap={4}>
+            <Grid columns={{ minWidth: 260, repeat: 'fit' }} gap={3}>
+              {displayedResources.map((res) => (
+                <ResourceCard key={res.id} resource={res} elevation="none" />
+              ))}
+            </Grid>
+
+            {filteredResources.length > visibleCount && (
+              <HStack justify="center">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  label={`Load More (${filteredResources.length - visibleCount} remaining)`}
+                  onClick={() => setVisibleCount((c) => c + 24)}
+                />
+              </HStack>
+            )}
+          </VStack>
         ) : (
           <Card
             padding={6}
@@ -502,82 +523,84 @@ function ExploreContent() {
       </VStack>
 
       {/* REFINED FILTER MODAL / DRAWER (Requirement 10) */}
-      <Dialog
-        isOpen={filterModalOpen}
-        onOpenChange={(open) => !open && setFilterModalOpen(false)}
-        width={680}
-      >
-        <DialogHeader title="Filter Academic Resources" />
-        <div style={{ padding: 'var(--spacing-4)' }}>
-          <VStack gap={4}>
-            <Text type="supporting" color="secondary" size="sm">
-              Refine resources by qualification, examination board, academic subject, and document type.
-            </Text>
+      {filterModalOpen && (
+        <Dialog
+          isOpen={filterModalOpen}
+          onOpenChange={(open) => !open && setFilterModalOpen(false)}
+          width={680}
+        >
+          <DialogHeader title="Filter Academic Resources" />
+          <div style={{ padding: 'var(--spacing-4)' }}>
+            <VStack gap={4}>
+              <Text type="supporting" color="secondary" size="sm">
+                Refine resources by qualification, examination board, academic subject, and document type.
+              </Text>
 
-            <Grid columns={{ minWidth: 180, repeat: 'fit' }} gap={3}>
-              <Selector
-                label="Qualification"
-                value={qualification}
-                onChange={(val) => handleFilterChange(String(val), examBoard, subject, resourceType, sortOrder)}
-                options={[
-                  { value: 'all', label: 'All Qualifications' },
-                  ...INITIAL_QUALIFICATIONS.map((q) => ({ value: q.slug, label: q.name })),
-                ]}
-                size="sm"
-              />
+              <Grid columns={{ minWidth: 180, repeat: 'fit' }} gap={3}>
+                <Selector
+                  label="Qualification"
+                  value={qualification}
+                  onChange={(val) => handleFilterChange(String(val), examBoard, subject, resourceType, sortOrder)}
+                  options={[
+                    { value: 'all', label: 'All Qualifications' },
+                    ...INITIAL_QUALIFICATIONS.map((q) => ({ value: q.slug, label: q.name })),
+                  ]}
+                  size="sm"
+                />
 
-              <Selector
-                label="Exam Board"
-                value={examBoard}
-                onChange={(val) => handleFilterChange(qualification, String(val), subject, resourceType, sortOrder)}
-                options={[
-                  { value: 'all', label: 'All Exam Boards' },
-                  ...INITIAL_EXAM_BOARDS.map((b) => ({ value: b.slug, label: b.name })),
-                ]}
-                size="sm"
-              />
+                <Selector
+                  label="Exam Board"
+                  value={examBoard}
+                  onChange={(val) => handleFilterChange(qualification, String(val), subject, resourceType, sortOrder)}
+                  options={[
+                    { value: 'all', label: 'All Exam Boards' },
+                    ...INITIAL_EXAM_BOARDS.map((b) => ({ value: b.slug, label: b.name })),
+                  ]}
+                  size="sm"
+                />
 
-              <Selector
-                label="Subject"
-                value={subject}
-                onChange={(val) => handleFilterChange(qualification, examBoard, String(val), resourceType, sortOrder)}
-                options={[
-                  { value: 'all', label: 'All Subjects' },
-                  ...INITIAL_SUBJECTS.map((s) => ({ value: s.slug, label: s.name })),
-                ]}
-                size="sm"
-              />
+                <Selector
+                  label="Subject"
+                  value={subject}
+                  onChange={(val) => handleFilterChange(qualification, examBoard, String(val), resourceType, sortOrder)}
+                  options={[
+                    { value: 'all', label: 'All Subjects' },
+                    ...INITIAL_SUBJECTS.map((s) => ({ value: s.slug, label: s.name })),
+                  ]}
+                  size="sm"
+                />
 
-              <Selector
-                label="Resource Type"
-                value={resourceType}
-                onChange={(val) => handleFilterChange(qualification, examBoard, subject, String(val), sortOrder)}
-                options={[
-                  { value: 'all', label: 'All Resource Types' },
-                  ...RESOURCE_TYPES.map((t) => ({ value: t, label: t })),
-                ]}
-                size="sm"
-              />
-            </Grid>
+                <Selector
+                  label="Resource Type"
+                  value={resourceType}
+                  onChange={(val) => handleFilterChange(qualification, examBoard, subject, String(val), sortOrder)}
+                  options={[
+                    { value: 'all', label: 'All Resource Types' },
+                    ...RESOURCE_TYPES.map((t) => ({ value: t, label: t })),
+                  ]}
+                  size="sm"
+                />
+              </Grid>
 
-            <HStack justify="between" vAlign="center" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-3)' }}>
-              <Button
-                variant="ghost"
-                size="sm"
-                label="Reset all filters"
-                onClick={handleClearFilters}
-              />
+              <HStack justify="between" vAlign="center" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-3)' }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  label="Reset all filters"
+                  onClick={handleClearFilters}
+                />
 
-              <Button
-                variant="primary"
-                size="sm"
-                label={`Show ${filteredResources.length} Resources`}
-                onClick={() => setFilterModalOpen(false)}
-              />
-            </HStack>
-          </VStack>
-        </div>
-      </Dialog>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  label={`Show ${filteredResources.length} Resources`}
+                  onClick={() => setFilterModalOpen(false)}
+                />
+              </HStack>
+            </VStack>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

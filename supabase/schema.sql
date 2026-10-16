@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
+CREATE INDEX IF NOT EXISTS idx_profiles_username_lower ON profiles(LOWER(username));
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
 
 -- ------------------------------------------------------------------------------
@@ -124,6 +125,7 @@ CREATE TABLE IF NOT EXISTS resources (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_resources_slug ON resources(slug);
 CREATE INDEX IF NOT EXISTS idx_resources_creator ON resources(creator_id);
 CREATE INDEX IF NOT EXISTS idx_resources_qualification ON resources(qualification_id);
 CREATE INDEX IF NOT EXISTS idx_resources_exam_board ON resources(exam_board_id);
@@ -133,7 +135,15 @@ CREATE INDEX IF NOT EXISTS idx_resources_status ON resources(status);
 CREATE INDEX IF NOT EXISTS idx_resources_featured ON resources(is_featured);
 CREATE INDEX IF NOT EXISTS idx_resources_rating ON resources(rating_avg DESC);
 CREATE INDEX IF NOT EXISTS idx_resources_saves ON resources(saves_count DESC);
+CREATE INDEX IF NOT EXISTS idx_resources_downloads ON resources(downloads_count DESC);
 CREATE INDEX IF NOT EXISTS idx_resources_created ON resources(created_at DESC);
+
+-- Composite partial indexes for hot published listing queries
+CREATE INDEX IF NOT EXISTS idx_resources_published_saves ON resources(saves_count DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_resources_published_created ON resources(created_at DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_resources_published_rating ON resources(rating_avg DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_resources_published_downloads ON resources(downloads_count DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_resources_published_subject_saves ON resources(subject_id, saves_count DESC) WHERE status = 'published';
 
 -- Full text search index
 CREATE INDEX IF NOT EXISTS idx_resources_search ON resources USING gin(
@@ -233,6 +243,8 @@ CREATE TABLE IF NOT EXISTS collection_items (
     UNIQUE(collection_id, resource_id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_collection_items_collection ON collection_items(collection_id);
+
 -- ------------------------------------------------------------------------------
 -- 12. Follows & Connections
 -- ------------------------------------------------------------------------------
@@ -244,6 +256,8 @@ CREATE TABLE IF NOT EXISTS follows (
     PRIMARY KEY (follower_id, following_id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
+
 -- ------------------------------------------------------------------------------
 -- 13. Resource Requests
 -- ------------------------------------------------------------------------------
@@ -253,7 +267,7 @@ CREATE TABLE IF NOT EXISTS resource_requests (
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     qualification_id UUID REFERENCES qualifications(id) ON DELETE SET NULL,
-    exam_board_id REFERENCES exam_boards(id) ON DELETE SET NULL,
+    exam_board_id UUID REFERENCES exam_boards(id) ON DELETE SET NULL,
     subject_id UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
     topic_id UUID REFERENCES topics(id) ON DELETE SET NULL,
     resource_type TEXT,
@@ -265,6 +279,9 @@ CREATE TABLE IF NOT EXISTS resource_requests (
 
 CREATE INDEX IF NOT EXISTS idx_requests_status ON resource_requests(status);
 CREATE INDEX IF NOT EXISTS idx_requests_subject ON resource_requests(subject_id);
+CREATE INDEX IF NOT EXISTS idx_requests_user ON resource_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_requests_created ON resource_requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_requests_status_created ON resource_requests(status, created_at DESC);
 
 -- ------------------------------------------------------------------------------
 -- 14. Reports & Moderation

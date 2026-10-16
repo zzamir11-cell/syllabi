@@ -1,10 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { useSyllabi } from '@/lib/store';
 import { ResourceCard } from '@/components/ResourceCard';
-import { ResourceGridSkeleton } from '@/components/ResourceCardSkeleton';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Grid } from '@astryxdesign/core/Grid';
 import { Text } from '@astryxdesign/core/Text';
@@ -14,15 +13,12 @@ import { Section } from '@astryxdesign/core/Section';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 
 export default function SavedResourcesPage() {
-  const { resources, savedResourceIds } = useSyllabi();
-  const [loading, setLoading] = React.useState(true);
+  const { resources, isResourceSaved } = useSyllabi();
 
-  React.useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 200);
-    return () => clearTimeout(t);
-  }, []);
-
-  const savedResources = resources.filter((r) => savedResourceIds.includes(r.id));
+  const savedResources = useMemo(
+    () => resources.filter((r) => isResourceSaved(r.id)),
+    [resources, isResourceSaved]
+  );
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'var(--spacing-6) var(--spacing-4)' }}>
@@ -42,11 +38,7 @@ export default function SavedResourcesPage() {
           </Link>
         </HStack>
 
-        {loading ? (
-          <Grid columns={{ minWidth: 280, repeat: 'fit' }} gap={4}>
-            <ResourceGridSkeleton count={3} />
-          </Grid>
-        ) : savedResources.length > 0 ? (
+        {savedResources.length > 0 ? (
           <Grid columns={{ minWidth: 280, repeat: 'fit' }} gap={4}>
             {savedResources.map((res) => (
               <ResourceCard key={res.id} resource={res} />

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Resource } from '@/lib/types';
 import { useSyllabi } from '@/lib/store';
 import { formatSavesCount, formatRating } from '@/lib/formatters';
@@ -12,20 +13,23 @@ import { Button } from '@astryxdesign/core/Button';
 import { Token } from '@astryxdesign/core/Token';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { Avatar } from '@astryxdesign/core/Avatar';
-import { ShareCardModal } from './ShareCardModal';
-import { getSubjectColor, getSubjectTokenColor } from '@/lib/academicColors';
+import { getSubjectTokenColor } from '@/lib/academicColors';
+
+const ShareCardModal = dynamic(
+  () => import('./ShareCardModal').then((mod) => mod.ShareCardModal),
+  { ssr: false }
+);
 
 interface ResourceCardProps {
   resource: Resource;
   elevation?: 'none' | 'low' | 'med';
 }
 
-export function ResourceCard({ resource, elevation = 'low' }: ResourceCardProps) {
+export const ResourceCard = memo(function ResourceCard({ resource, elevation = 'low' }: ResourceCardProps) {
   const { isResourceSaved, toggleSaveResource } = useSyllabi();
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const saved = isResourceSaved(resource.id);
-  const subjectStyle = getSubjectColor(resource.subjectName);
 
   return (
     <>
@@ -187,12 +191,14 @@ export function ResourceCard({ resource, elevation = 'low' }: ResourceCardProps)
         </VStack>
       </ClickableCard>
 
-      <ShareCardModal
-        resource={resource}
-        isOpen={shareModalOpen}
-        onClose={() => setShareModalOpen(false)}
-        defaultStyle="resource_stats"
-      />
+      {shareModalOpen && (
+        <ShareCardModal
+          resource={resource}
+          isOpen={shareModalOpen}
+          onClose={() => setShareModalOpen(false)}
+          defaultStyle="resource_stats"
+        />
+      )}
     </>
   );
-}
+});

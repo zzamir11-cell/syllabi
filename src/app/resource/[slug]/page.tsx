@@ -1,14 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, useMemo, use } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useSyllabi } from '@/lib/store';
 import { ResourceCard } from '@/components/ResourceCard';
-import { ShareCardModal } from '@/components/ShareCardModal';
-import { ReportModal } from '@/components/ReportModal';
 import { getSubjectColor, getSubjectTokenColor } from '@/lib/academicColors';
-import { Section } from '@astryxdesign/core/Section';
 import { VStack, HStack, StackItem } from '@astryxdesign/core/Layout';
 import { Grid } from '@astryxdesign/core/Grid';
 import { Text } from '@astryxdesign/core/Text';
@@ -22,13 +19,21 @@ import { ProgressBar } from '@astryxdesign/core/ProgressBar';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { TextArea } from '@astryxdesign/core/TextArea';
 
+const ShareCardModal = dynamic(
+  () => import('@/components/ShareCardModal').then((mod) => mod.ShareCardModal),
+  { ssr: false }
+);
+const ReportModal = dynamic(
+  () => import('@/components/ReportModal').then((mod) => mod.ReportModal),
+  { ssr: false }
+);
+
 interface ResourcePageProps {
   params: Promise<{ slug: string }>;
 }
 
 export default function ResourceDetailPage({ params }: ResourcePageProps) {
   const resolvedParams = use(params);
-  const router = useRouter();
   const {
     resources,
     isResourceSaved,
@@ -38,14 +43,16 @@ export default function ResourceDetailPage({ params }: ResourcePageProps) {
     addRating,
   } = useSyllabi();
 
-  const resource = resources.find((r) => r.slug === resolvedParams.slug);
+  const resource = useMemo(
+    () => resources.find((r) => r.slug === resolvedParams.slug),
+    [resources, resolvedParams.slug]
+  );
 
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   // Preview reader state
   const [currentPage, setCurrentPage] = useState(1);
@@ -63,7 +70,14 @@ export default function ResourceDetailPage({ params }: ResourcePageProps) {
     if (resource) {
       recordView(resource.id);
     }
-  }, [resource?.id]);
+  }, [resource?.id, recordView]);
+
+  const relatedResources = useMemo(() => {
+    if (!resource) return [];
+    return resources
+      .filter((r) => r.id !== resource.id && (r.subjectId === resource.subjectId || r.qualificationId === resource.qualificationId))
+      .slice(0, 3);
+  }, [resources, resource]);
 
   if (!resource) {
     return (
@@ -85,49 +99,50 @@ export default function ResourceDetailPage({ params }: ResourcePageProps) {
 
   const saved = isResourceSaved(resource.id);
 
-  const relatedResources = resources
-    .filter((r) => r.id !== resource.id && (r.subjectId === resource.subjectId || r.qualificationId === resource.qualificationId))
-    .slice(0, 3);
-
   const handleDownloadClick = () => {
     setIsDownloading(true);
     recordDownload(resource.id);
-    setTimeout(() => {
-      // Create an artificial safe blob download for testing
-      const blob = new Blob(
-        [
-          `Syllabi Resource: ${resource.title}\nCreator: @${resource.creatorUsername}\nSpecification: ${resource.qualificationName} · ${resource.examBoardName} · ${resource.subjectName}\n\nDisclaimer: This is a student-created study resource from syllabi.app.`,
-        ],
-        { type: 'text/plain;charset=utf-8' }
-      );
-      const url = URL.createObjectURL(blob);
+    // If resource has a real Supabase Storage URL, open/download it directly
+    if (resource.fileUrl && resource.fileUrl.startsWith('http')) {
       const a = document.createElement('a');
-      a.href = url;
+      a.href = resource.fileUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
       a.download = resource.fileName;
       a.click();
-      URL.revokeObjectURL(url);
       setIsDownloading(false);
-    }, 600);
+      return;
+    }
+
+    const blob = new Blob(
+      [
+        `Syllabi Resource: ${resource.title}\nCreator: @${resource.creatorUsername}\nSpecification: ${resource.qualificationName} · ${resource.examBoardName} · ${resource.subjectName}\n\nDisclaimer: This is a student-created study resource from syllabi.app.`,
+      ],
+      { type: 'text/plain;charset=utf-8' }
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = resource.fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+    setIsDownloading(false);
   };
 
   const handleRatingSubmit = () => {
-    setIsSubmittingRating(true);
-    setTimeout(() => {
-      const overall = (helpfulScore + clarityScore + examFocusScore + organizationScore) / 4;
-      addRating({
-        resourceId: resource.id,
-        userId: 'current-user',
-        username: 'student',
-        helpfulScore,
-        clarityScore,
-        examFocusScore,
-        organizationScore,
-        overallScore: Number(overall.toFixed(2)),
-        reviewText: reviewComment,
-      });
-      setIsSubmittingRating(false);
-      setRateModalOpen(false);
-    }, 350);
+    const overall = (helpfulScore + clarityScore + examFocusScore + organizationScore) / 4;
+    addRating({
+      resourceId: resource.id,
+      userId: 'current-user',
+      username: 'student',
+      helpfulScore,
+      clarityScore,
+      examFocusScore,
+      organizationScore,
+      overallScore: Number(overall.toFixed(2)),
+      reviewText: reviewComment,
+    });
+    setRateModalOpen(false);
   };
 
   return (
@@ -652,115 +667,121 @@ export default function ResourceDetailPage({ params }: ResourcePageProps) {
       </VStack>
 
       {/* Share Card Modal */}
-      <ShareCardModal
-        resource={resource}
-        isOpen={shareModalOpen}
-        onClose={() => setShareModalOpen(false)}
-        defaultStyle="new_upload"
-      />
+      {shareModalOpen && (
+        <ShareCardModal
+          resource={resource}
+          isOpen={shareModalOpen}
+          onClose={() => setShareModalOpen(false)}
+          defaultStyle="new_upload"
+        />
+      )}
 
       {/* Report Modal */}
-      <ReportModal
-        isOpen={reportModalOpen}
-        onClose={() => setReportModalOpen(false)}
-        targetType="resource"
-        targetId={resource.id}
-        targetTitle={resource.title}
-      />
+      {reportModalOpen && (
+        <ReportModal
+          isOpen={reportModalOpen}
+          onClose={() => setReportModalOpen(false)}
+          targetType="resource"
+          targetId={resource.id}
+          targetTitle={resource.title}
+        />
+      )}
 
       {/* Rate Resource Modal */}
-      <Dialog
-        isOpen={rateModalOpen}
-        onOpenChange={(open) => !open && setRateModalOpen(false)}
-        width={500}
-      >
-        <DialogHeader
-          title="Rate this resource"
-          subtitle="Help other students understand the quality and utility of these notes."
-        />
-        <VStack gap={4} padding={4}>
-          <VStack gap={3}>
-            <HStack justify="between" vAlign="center">
-              <Text type="body" size="sm">Helpful score (1-5):</Text>
-              <HStack gap={1}>
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Button
-                    key={s}
-                    size="sm"
-                    variant={helpfulScore === s ? 'primary' : 'secondary'}
-                    label={String(s)}
-                    onClick={() => setHelpfulScore(s)}
-                  />
-                ))}
+      {rateModalOpen && (
+        <Dialog
+          isOpen={rateModalOpen}
+          onOpenChange={(open) => !open && setRateModalOpen(false)}
+          width={500}
+        >
+          <DialogHeader
+            title="Rate this resource"
+            subtitle="Help other students understand the quality and utility of these notes."
+          />
+          <VStack gap={4} padding={4}>
+            <VStack gap={3}>
+              <HStack justify="between" vAlign="center">
+                <Text type="body" size="sm">Helpful score (1-5):</Text>
+                <HStack gap={1}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Button
+                      key={s}
+                      size="sm"
+                      variant={helpfulScore === s ? 'primary' : 'secondary'}
+                      label={String(s)}
+                      onClick={() => setHelpfulScore(s)}
+                    />
+                  ))}
+                </HStack>
               </HStack>
-            </HStack>
 
-            <HStack justify="between" vAlign="center">
-              <Text type="body" size="sm">Clarity score (1-5):</Text>
-              <HStack gap={1}>
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Button
-                    key={s}
-                    size="sm"
-                    variant={clarityScore === s ? 'primary' : 'secondary'}
-                    label={String(s)}
-                    onClick={() => setClarityScore(s)}
-                  />
-                ))}
+              <HStack justify="between" vAlign="center">
+                <Text type="body" size="sm">Clarity score (1-5):</Text>
+                <HStack gap={1}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Button
+                      key={s}
+                      size="sm"
+                      variant={clarityScore === s ? 'primary' : 'secondary'}
+                      label={String(s)}
+                      onClick={() => setClarityScore(s)}
+                    />
+                  ))}
+                </HStack>
               </HStack>
-            </HStack>
 
-            <HStack justify="between" vAlign="center">
-              <Text type="body" size="sm">Exam-focused (1-5):</Text>
-              <HStack gap={1}>
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Button
-                    key={s}
-                    size="sm"
-                    variant={examFocusScore === s ? 'primary' : 'secondary'}
-                    label={String(s)}
-                    onClick={() => setExamFocusScore(s)}
-                  />
-                ))}
+              <HStack justify="between" vAlign="center">
+                <Text type="body" size="sm">Exam-focused (1-5):</Text>
+                <HStack gap={1}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Button
+                      key={s}
+                      size="sm"
+                      variant={examFocusScore === s ? 'primary' : 'secondary'}
+                      label={String(s)}
+                      onClick={() => setExamFocusScore(s)}
+                    />
+                  ))}
+                </HStack>
               </HStack>
-            </HStack>
 
-            <HStack justify="between" vAlign="center">
-              <Text type="body" size="sm">Well-organized (1-5):</Text>
-              <HStack gap={1}>
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Button
-                    key={s}
-                    size="sm"
-                    variant={organizationScore === s ? 'primary' : 'secondary'}
-                    label={String(s)}
-                    onClick={() => setOrganizationScore(s)}
-                  />
-                ))}
+              <HStack justify="between" vAlign="center">
+                <Text type="body" size="sm">Well-organized (1-5):</Text>
+                <HStack gap={1}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Button
+                      key={s}
+                      size="sm"
+                      variant={organizationScore === s ? 'primary' : 'secondary'}
+                      label={String(s)}
+                      onClick={() => setOrganizationScore(s)}
+                    />
+                  ))}
+                </HStack>
               </HStack>
+            </VStack>
+
+            <VStack gap={1}>
+              <Text type="label" weight="medium">
+                Optional review notes:
+              </Text>
+              <TextArea
+                label="Review text"
+                isLabelHidden
+                placeholder="What specifically makes these notes helpful or how could they be improved?"
+                value={reviewComment}
+                onChange={setReviewComment}
+                rows={2}
+              />
+            </VStack>
+
+            <HStack gap={3} justify="end">
+              <Button variant="secondary" label="Cancel" onClick={() => setRateModalOpen(false)} />
+              <Button variant="primary" label="Submit Rating" onClick={handleRatingSubmit} />
             </HStack>
           </VStack>
-
-          <VStack gap={1}>
-            <Text type="label" weight="medium">
-              Optional review notes:
-            </Text>
-            <TextArea
-              label="Review text"
-              isLabelHidden
-              placeholder="What specifically makes these notes helpful or how could they be improved?"
-              value={reviewComment}
-              onChange={setReviewComment}
-              rows={2}
-            />
-          </VStack>
-
-          <HStack gap={3} justify="end">
-            <Button variant="secondary" label="Cancel" onClick={() => setRateModalOpen(false)} />
-            <Button variant="primary" label="Submit Rating" onClick={handleRatingSubmit} />
-          </HStack>
-        </VStack>
-      </Dialog>
+        </Dialog>
+      )}
     </div>
   );
 }

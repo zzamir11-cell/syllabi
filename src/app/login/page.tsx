@@ -4,10 +4,9 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSyllabi } from '@/lib/store';
-import { INITIAL_CREATORS } from '@/lib/data';
 import { createClient } from '@/lib/supabase/client';
-import { isSupabaseConfigured } from '@/lib/supabase/service';
 import { SyllabiLogo } from '@/components/SyllabiLogo';
+import { GoogleLogo } from '@/components/GoogleLogo';
 import { Center } from '@astryxdesign/core/Center';
 import { Card } from '@astryxdesign/core/Card';
 import { Grid } from '@astryxdesign/core/Grid';
@@ -22,7 +21,7 @@ import { Token } from '@astryxdesign/core/Token';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setCurrentUser, showToast, signInWithGoogle, isSupabaseConnected } = useSyllabi();
+  const { showToast, signInWithGoogle } = useSyllabi();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,53 +31,31 @@ export default function LoginPage() {
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!email || !password) {
-      setErrorMsg('Please enter both your student email/username and password.');
+      setErrorMsg('Please enter both your student email and password.');
       return;
     }
 
     setIsLoading(true);
     setErrorMsg('');
 
-    if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-        if (error) {
-          setErrorMsg(error.message);
-          setIsLoading(false);
-          return;
-        }
-
-        showToast('Signed in successfully!');
-        router.push('/explore');
-      } catch (err: any) {
-        setErrorMsg(err.message || 'Authentication failed');
+      if (error) {
+        setErrorMsg(error.message);
         setIsLoading(false);
+        return;
       }
-    } else {
-      // Local fallback for testing
-      setTimeout(() => {
-        setIsLoading(false);
-        const found = INITIAL_CREATORS.find(
-          (c) => c.username.toLowerCase() === email.toLowerCase() || email.includes(c.username)
-        );
-        setCurrentUser(found || INITIAL_CREATORS[0]);
-        showToast(`Welcome back, @${(found || INITIAL_CREATORS[0]).username}!`);
-        router.push('/explore');
-      }, 500);
-    }
-  };
 
-  const handleQuickDemoLogin = (username: string) => {
-    const found = INITIAL_CREATORS.find((c) => c.username === username);
-    if (found) {
-      setCurrentUser(found);
-      showToast(`Logged in as @${found.username}`);
-      router.push('/explore');
+      showToast('Signed in successfully!');
+      router.push('/profile');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Authentication failed');
+      setIsLoading(false);
     }
   };
 
@@ -111,6 +88,7 @@ export default function LoginPage() {
                   <Button
                     size="lg"
                     variant="secondary"
+                    icon={<GoogleLogo size={18} />}
                     label="Continue with Google"
                     onClick={() => signInWithGoogle()}
                   />
@@ -176,24 +154,6 @@ export default function LoginPage() {
                       />
                     </VStack>
                   </form>
-
-                  {/* Fast 1-click persona logins for testing */}
-                  {!isSupabaseConnected && (
-                    <VStack gap={2} style={{ marginTop: 'var(--spacing-2)' }}>
-                      <Divider label="Or quick test with demo students" />
-                      <HStack gap={2} wrap="wrap">
-                        {INITIAL_CREATORS.slice(0, 3).map((c) => (
-                          <Button
-                            key={c.id}
-                            size="sm"
-                            variant="secondary"
-                            label={`@${c.username}`}
-                            onClick={() => handleQuickDemoLogin(c.username)}
-                          />
-                        ))}
-                      </HStack>
-                    </VStack>
-                  )}
                 </VStack>
 
                 <HStack justify="center">

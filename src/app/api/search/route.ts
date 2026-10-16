@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { INITIAL_RESOURCES, INITIAL_QUALIFICATIONS, INITIAL_EXAM_BOARDS, INITIAL_SUBJECTS } from '@/lib/data';
+import { fetchResourcesFromSupabase } from '@/lib/supabase/service';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -37,22 +38,39 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const targetQual = qualification !== 'all' ? qualification : extractedQual || undefined;
+  const targetBoard = board !== 'all' ? board : extractedBoard || undefined;
+  const targetSubj = subject !== 'all' ? subject : extractedSubj || undefined;
+
+  let sourceResources = INITIAL_RESOURCES;
+  try {
+    const dbResources = await fetchResourcesFromSupabase({
+      qualification: targetQual,
+      examBoard: targetBoard,
+      subject: targetSubj,
+      resourceType: type !== 'all' ? type : undefined,
+      query: q || undefined,
+      limit: 40,
+    });
+    if (dbResources) {
+      sourceResources = dbResources;
+    }
+  } catch {
+    // Fallback to INITIAL_RESOURCES
+  }
+
   // Filter resources
-  const results = INITIAL_RESOURCES.filter((res) => {
+  const results = sourceResources.filter((res) => {
     if (res.status === 'removed') return false;
 
-    // Direct filters take precedence; fall back to extracted intent
-    const targetQual = qualification !== 'all' ? qualification : extractedQual;
     if (targetQual && res.qualificationName.toLowerCase() !== targetQual.toLowerCase() && !res.qualificationId.includes(targetQual)) {
       return false;
     }
 
-    const targetBoard = board !== 'all' ? board : extractedBoard;
     if (targetBoard && res.examBoardName.toLowerCase() !== targetBoard.toLowerCase() && !res.examBoardId.includes(targetBoard)) {
       return false;
     }
 
-    const targetSubj = subject !== 'all' ? subject : extractedSubj;
     if (targetSubj && res.subjectName.toLowerCase() !== targetSubj.toLowerCase() && !res.subjectId.includes(targetSubj)) {
       return false;
     }
@@ -65,7 +83,6 @@ export async function GET(req: NextRequest) {
     if (lowerQ) {
       const terms = lowerQ.split(/\s+/).filter((t) => t.length > 1);
       const haystack = `${res.title} ${res.description} ${res.topicName || ''} ${res.tags.join(' ')} ${res.creatorUsername}`.toLowerCase();
-      // If terms exist after removing extracted facets, check if at least one matches
       const nonFacetTerms = terms.filter(
         (t) =>
           !['aqa', 'edexcel', 'ocr', 'gcse', 'a-level', 'alevel', 'notes', 'guide', 'chemistry', 'biology', 'physics', 'maths'].includes(t)
@@ -79,14 +96,21 @@ export async function GET(req: NextRequest) {
     return true;
   });
 
-  return NextResponse.json({
-    success: true,
-    total: results.length,
-    results,
-    extractedIntent: {
-      qualification: extractedQual,
-      examBoard: extractedBoard,
-      subject: extractedSubj,
+  return NextResponse.json(
+    {
+      success: true,
+      total: results.length,
+      results,
+      extractedIntent: {
+        qualification: extractedQual,
+        examBoard: extractedBoard,
+        subject: extractedSubj,
+      },
     },
-  });
+    {
+      headers: {
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+      },
+    }
+  );
 }

@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSyllabi } from '@/lib/store';
-import { INITIAL_QUALIFICATIONS, INITIAL_SUBJECTS, INITIAL_CREATORS } from '@/lib/data';
+import { INITIAL_SUBJECTS } from '@/lib/data';
 import { ResourceCard } from '@/components/ResourceCard';
 import { getSubjectTokenColor } from '@/lib/academicColors';
-import { formatSavesCount, formatViewsCount } from '@/lib/formatters';
+import { formatSavesCount } from '@/lib/formatters';
 import { Section } from '@astryxdesign/core/Section';
 import { VStack, HStack, StackItem } from '@astryxdesign/core/Layout';
 import { Grid } from '@astryxdesign/core/Grid';
@@ -35,11 +35,27 @@ export default function HomePage() {
     }
   };
 
-  const featuredResource = resources.find((r) => r.isFeatured) || resources[0];
+  const featuredResource = useMemo(
+    () => resources.find((r) => r.isFeatured) || resources[0],
+    [resources]
+  );
 
-  const popularResources = [...resources]
-    .sort((a, b) => b.savesCount - a.savesCount)
-    .slice(0, 4);
+  const popularResources = useMemo(
+    () =>
+      [...resources]
+        .sort((a, b) => b.savesCount - a.savesCount)
+        .slice(0, 4),
+    [resources]
+  );
+
+  const subjectCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of resources) {
+      const key = r.subjectName.toLowerCase();
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }, [resources]);
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'var(--spacing-5) var(--spacing-4)' }}>
@@ -205,11 +221,36 @@ export default function HomePage() {
             </Link>
           </HStack>
 
-          <Grid columns={{ minWidth: 260, repeat: 'fit' }} gap={3}>
-            {popularResources.map((res) => (
-              <ResourceCard key={res.id} resource={res} />
-            ))}
-          </Grid>
+          {popularResources.length > 0 ? (
+            <Grid columns={{ minWidth: 260, repeat: 'fit' }} gap={3}>
+              {popularResources.map((res) => (
+                <ResourceCard key={res.id} resource={res} />
+              ))}
+            </Grid>
+          ) : (
+            <Card
+              padding={6}
+              elevation="none"
+              style={{
+                backgroundColor: 'var(--color-background-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-container)',
+                textAlign: 'center',
+              }}
+            >
+              <VStack gap={3} hAlign="center">
+                <Heading level={3} style={{ fontSize: '1.125rem' }}>
+                  No published resources yet
+                </Heading>
+                <Text type="body" color="secondary" size="sm" style={{ maxWidth: 460 }}>
+                  Be the first student to upload revision notes, mind maps, or formula sheets to the academic repository.
+                </Text>
+                <Link href="/upload" style={{ textDecoration: 'none' }}>
+                  <Button size="md" variant="primary" label="Upload Revision Material" />
+                </Link>
+              </VStack>
+            </Card>
+          )}
         </VStack>
 
         {/* VISUAL SUBJECT BROWSING (Requirement 21) */}
@@ -230,9 +271,7 @@ export default function HomePage() {
 
           <Grid columns={{ minWidth: 200, repeat: 'fit' }} gap={3}>
             {INITIAL_SUBJECTS.slice(0, 6).map((sub) => {
-              const subjectCount = resources.filter(
-                (r) => r.subjectName.toLowerCase() === sub.name.toLowerCase()
-              ).length;
+              const subjectCount = subjectCounts[sub.name.toLowerCase()] || 0;
 
               return (
                 <ClickableCard

@@ -58,24 +58,56 @@ export async function analyzeUploadedFile(
 
   let pageCount = 1;
 
-  // Extract page count for PDF
+  // Extract page count for PDF using bounded slices (max 768 KB instead of full 25 MB buffer)
   if (lowerName.endsWith('.pdf') || mimeType === 'application/pdf') {
     try {
-      if (file.arrayBuffer) {
-        const buffer = await file.arrayBuffer();
-        const text = new TextDecoder('latin1').decode(buffer);
-        // Look for PDF /Type /Page occurrences or /Count N
-        const countMatch = text.match(/\/Count\s+(\d+)/);
-        if (countMatch && parseInt(countMatch[1]) > 0) {
-          pageCount = Math.min(250, parseInt(countMatch[1]));
+      const sliceBlob =
+        typeof (file as File).slice === 'function'
+          ? (file as File)
+          : null;
+
+      if (sliceBlob) {
+        const HEAD_BYTES = 512 * 1024;
+        const TAIL_BYTES = 256 * 1024;
+        const decoder = new TextDecoder('latin1');
+        let sampleText = '';
+
+        if (fileSize <= HEAD_BYTES + TAIL_BYTES) {
+          const buf = await sliceBlob.arrayBuffer();
+          sampleText = decoder.decode(buf);
         } else {
-          const pageMatches = text.match(/\/Type\s*\/Page\b/g);
-          if (pageMatches && pageMatches.length > 0) {
+          const [headBuf, tailBuf] = await Promise.all([
+            sliceBlob.slice(0, HEAD_BYTES).arrayBuffer(),
+            sliceBlob.slice(fileSize - TAIL_BYTES, fileSize).arrayBuffer(),
+          ]);
+          sampleText = decoder.decode(headBuf) + '\n' + decoder.decode(tailBuf);
+        }
+
+        // Look for PDF /Count N (typically in the Pages catalog dictionary) or /Type /Page
+        const countMatches = [...sampleText.matchAll(/\/Count\s+(\d+)/g)];
+        const counts = countMatches
+          .map((m) => parseInt(m[1], 10))
+          .filter((n) => !Number.isNaN(n) && n > 0 && n <= 500);
+
+        if (counts.length > 0) {
+          pageCount = Math.min(250, Math.max(...counts));
+        } else {
+          const pageMatches = sampleText.match(/\/Type\s*\/Page\b/g);
+          if (pageMatches && pageMatches.length > 0 && fileSize <= HEAD_BYTES + TAIL_BYTES) {
             pageCount = Math.min(250, pageMatches.length);
           } else {
-            // Heuristic estimation based on PDF byte size (approx 45KB per page average)
             pageCount = Math.max(1, Math.min(80, Math.round(fileSize / (45 * 1024))));
           }
+        }
+      } else if (file.arrayBuffer) {
+        const buffer = await file.arrayBuffer();
+        const slice = buffer.byteLength > 512 * 1024 ? buffer.slice(0, 512 * 1024) : buffer;
+        const text = new TextDecoder('latin1').decode(slice);
+        const countMatch = text.match(/\/Count\s+(\d+)/);
+        if (countMatch && parseInt(countMatch[1], 10) > 0) {
+          pageCount = Math.min(250, parseInt(countMatch[1], 10));
+        } else {
+          pageCount = Math.max(1, Math.min(80, Math.round(fileSize / (45 * 1024))));
         }
       } else {
         pageCount = Math.max(1, Math.min(60, Math.round(fileSize / (50 * 1024))));
